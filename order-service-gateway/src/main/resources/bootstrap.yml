@@ -1,0 +1,67 @@
+# Tomcat
+server:
+  port: 8080
+
+debug: true
+# Spring
+spring:
+  application:
+    # 应用名称
+    name: order-gateway
+  profiles:
+    # 环境配置
+    active: dev
+  main:
+    allow-bean-definition-overriding: true
+  cloud:
+    nacos:
+      config:
+        # 配置文件格式
+        file-extension: yml
+        # 共享配置
+        shared-dataids: application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
+    sentinel:
+      # 取消控制台懒加载
+      eager: true
+      # nacos配置持久化
+      datasource:
+        ds1:
+          nacos:
+            dataId: order-service-gateway
+            groupId: DEFAULT_GROUP
+            data-type: json
+            rule-type: flow
+    gateway:
+      routes:
+        - id: orders_route
+          uri: lb://orders-service
+          predicates:
+            - Path=/orders/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userKeyResolver}"
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 2
+        - id: orders_route_gray
+          uri: lb://orders-service-gray
+          predicates:
+            - Path=/orders/**
+            - Header=X-Gray-Version, gray
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userKeyResolver}"
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 2
+      loadbalancer:
+          ribbon:
+            enabled: false
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowCredentials: true
+            allowedOrigins: "*"
+            allowedHeaders: "*"
+            allowedMethods: "*"
+
